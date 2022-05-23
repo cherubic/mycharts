@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "common.names.name" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.commonLabels "context" . ) | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.kubeappsapis.replicaCount }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+  {{- if .Values.kubeappsapis.updateStrategy }}
+  strategy: {{- toYaml .Values.kubeappsapis.updateStrategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      {{- with .Values.kubeappsapis.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels: {{- include "common.labels.matchLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.kubeappsapis.springboot.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.springboot.serviceAccount.create }}
+      serviceAccountName: {{ default (include "common.names.name" .) .Values.kubeappsapis.springboot.serviceAccount.name }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.hostAliases }}
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.hostAliases "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.podSecurityContext.enabled }}
+      securityContext:
+        {{- omit .Values.kubeappsapis.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.topologySpreadConstraints }}
+      topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.topologySpreadConstraints "context" .) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.affinity }}
+      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.kubeappsapis.initContainers }}
+      initContainers: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.initContainers "context" $) | trim | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ include "common.names.name" . }}
+          securityContext:
+            capabilities:
+              drop:
+                - NET_RAW
+            allowPrivilegeEscalation: false
+            {{- if .Values.kubeappsapis.springboot.containerSecurityContext.enabled }}
+            {{- omit .Values.kubeappsapis.springboot.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+            {{- end }}
+          image: "{{ .Values.kubeappsapis.springboot.image.repository }}:{{ .Values.kubeappsapis.springboot.image.tag }}"
+          imagePullPolicy: "{{ .Values.kubeappsapis.springboot.image.pullPolicy }}"
+          {{- if .Values.kubeappsapis.springboot.diagnosticMode.enabled }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.diagnosticMode.command "context" $) | nindent 12 }}
+          {{- else if .Values.kubeappsapis.springboot.command }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.command "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.kubeappsapis.springboot.diagnosticMode.enabled }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.diagnosticMode.args "context" $) | nindent 12 }}
+          {{- else if .Values.kubeappsapis.springboot.args }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.args "context" $) | nindent 12 }}
+          {{- end }}
+          env:
+            {{- if .Values.kubeappsapis.springboot.extraEnvVars }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          envFrom:
+            {{- if .Values.kubeappsapis.springboot.extraEnvVarsCM }}
+            - configMapRef:
+                name: {{ include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.extraEnvVarsCM "context" $) }}
+            {{- end }}
+            {{- if .Values.kubeappsapis.springboot.extraEnvVarsSecret }}
+            - secretRef:
+                name: {{ include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.extraEnvVarsSecret "context" $) }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.kubeappsapis.springboot.livenessProbe "enabled") "context" $) | nindent 12 }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.kubeappsapis.springboot.readinessProbe "enabled") "context" $) | nindent 12 }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" (omit .Values.kubeappsapis.springboot.startupProbe "enabled") "context" $) | nindent 12 }}
+          resources: {{- toYaml .Values.kubeappsapis.springboot.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: "/app/resources/bootstrap.yml"
+              name: {{ include "common.names.name" . }}
+            {{- if .Values.kubeappsapis.springboot.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: {{ include "common.names.name" . }}
+          configMap:
+            name: {{ include "common.names.name" . }}
+        {{- if .Values.kubeappsapis.springboot.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.kubeappsapis.springboot.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
